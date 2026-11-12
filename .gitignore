@@ -1,0 +1,16 @@
+*.iml
+.gradle
+.kotlin
+/local.properties
+/.idea
+.DS_Store
+/build
+/app/build
+.externalNativeBuild
+.cxx
+local.properties
+
+# release 서명 정보 (절대 올리지 않는다)
+keystore.properties
+*.jks
+*.keystore
