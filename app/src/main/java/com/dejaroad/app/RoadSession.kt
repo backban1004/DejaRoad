@@ -19,7 +19,8 @@ data class TripReview(val headline: String, val rows: List<ReviewRow>, val trace
 /**
  * 데자로드의 중심.
  * - 내비 회전 안내 목록에서 어려운 곳을 고르고(예습)
- * - 주행 중에는 속도를 이어 더해 경로 위 위치를 알고, 1km 전(지난번 급제동한 곳은 2km 전)에 소리로 알리고
+ * - 주행 중에는 속도를 이어 더해 경로 위 위치를 알고, 1.5km 전(지난번 급제동한 곳은 3km 전)에 소리로 알리고
+ *   (내비가 1km 전에 스스로 안내하므로 겹치지 않게 그보다 먼저 말한다)
  * - 브레이크 페달과 속도로 급제동을 찾아, 도착하면 어려운 곳마다 어떻게 지났는지 남긴다(복습)
  *
  * 앱에 하나만 있고, 화면(MainActivity)과 포그라운드 서비스(RoadService)가 함께 쓴다.
@@ -49,10 +50,14 @@ class RoadSession(context: Context) {
   /** '그냥 출발하기'를 눌러 예습 목록을 접었는지 */
   var previewDone by mutableStateOf(false)
     private set
+  /** 주행 기록 중인지. 중간에 세워도(휴게소, 신호) 주행 화면을 그대로 둔다 */
+  var tripActive by mutableStateOf(false)
+    private set
 
   val mode: Mode
     get() =
       when {
+        tripActive -> Mode.DRIVING
         review != null && !feed.isDriving -> Mode.REVIEW
         feed.isDriving -> Mode.DRIVING
         spots.isNotEmpty() || destination != null -> Mode.PREVIEW
@@ -62,7 +67,10 @@ class RoadSession(context: Context) {
   private var steps: List<Step> = emptyList()
   /** 내비가 목적지 남은 거리를 알려 준 때의 달린 거리 */
   private var destinationAtM = 0.0
-  private var tripActive = false
+  /** 시연 경로를 넣었으면 내비의 '안내 안 함'·빈 목적지 신호가 시연 경로를 지우지 않게 한다 */
+  private var demo = false
+  /** 주행 중에 내비 경로가 끝나거나 취소됐는지 */
+  private var routeGone = false
   private val events = mutableListOf<BrakeEvent>()
   private val eventPlaces = mutableMapOf<BrakeEvent, Pair<Double, Double>?>()
   private val trace = ArrayList<Tick>()
@@ -92,10 +100,10 @@ class RoadSession(context: Context) {
     feed.start()
     location.start()
     voice.start()
-    navi.onSteps = ::onSteps
-    navi.onDestination = { destination = it; destinationAtM = traveledM }
-    navi.onArrived = { arrived = true }
-    navi.onRouteGone = ::onRouteGone
+    navi.onSteps = { if (!demo) onSteps(it) }
+    navi.onDestination = { if (!demo) { destination = it; destinationAtM = traveledM } }
+    navi.onArrived = { if (!demo) arrived = true }
+    navi.onRouteGone = { if (!demo) onRouteGone() }
     navi.start()
     main.post(tick)
   }
@@ -131,7 +139,10 @@ class RoadSession(context: Context) {
   }
 
   private fun onRouteGone() {
-    if (tripActive) return
+    if (tripActive) {
+      routeGone = true
+      return
+    }
     if (steps.isEmpty() && spots.isEmpty()) return
     steps = emptyList()
     spots = emptyList()
@@ -148,17 +159,28 @@ class RoadSession(context: Context) {
 
   fun pastOf(spot: HardSpot): PastHard? = memory.lastHard(spot.key)
 
-  /** 목적지까지 남은 분: 내비가 알려 준 남은 시간에서 그 뒤에 달린 만큼 뺀다 */
+  /** 목적지까지 남은 거리: 내비가 알려 준 남은 거리에서 그 뒤에 달린 만큼 뺀다 */
+  fun remainingM(): Double? {
+    val d = destination ?: return null
+    if (d.remainM <= 0) return null
+    return (d.remainM - (traveledM - destinationAtM)).coerceAtLeast(0.0)
+  }
+
+  /** 목적지까지 남은 분: 남은 시간을 남은 거리 비율로 줄인다 */
   fun minutesToDestination(): Int? {
     val d = destination ?: return null
-    if (d.remainM <= 0 || d.remainS <= 0) return null
-    val left = (d.remainM - (traveledM - destinationAtM)).coerceAtLeast(0.0)
+    val left = remainingM() ?: return null
+    if (d.remainS <= 0) return null
     return ceil(left / d.remainM * d.remainS / 60).toInt()
   }
 
+  /** 아직 안 지난 어려운 곳 */
+  val upcoming: List<HardSpot>
+    get() = spots.filter { it.atM > traveledM - PASSED_M }
+
   /** 아직 안 지난 첫 어려운 곳 */
   val nextSpot: HardSpot?
-    get() = spots.firstOrNull { it.atM > traveledM - PASSED_M }
+    get() = upcoming.firstOrNull()
 
   // endregion
 
@@ -166,7 +188,7 @@ class RoadSession(context: Context) {
 
   fun playPreview() {
     previewDone = false
-    val text = Script.preview(spots, ::minutesTo, ::pastOf, System.currentTimeMillis())
+    val text = Script.preview(upcoming, ::minutesTo, ::pastOf, System.currentTimeMillis())
     voice.speak(text)
   }
 
@@ -175,6 +197,11 @@ class RoadSession(context: Context) {
   fun skipPreview() {
     voice.stop()
     previewDone = true
+  }
+
+  /** 접은 예습 목록을 다시 편다 */
+  fun reopenPreview() {
+    previewDone = false
   }
 
   // endregion
@@ -187,7 +214,10 @@ class RoadSession(context: Context) {
     val v = feed.speedKph
     val driving = feed.isDriving
 
-    if (driving && !tripActive && spots.isNotEmpty()) startTrip()
+    // 복습을 띄운 채 다시 출발하면(시속 20km 이상) 복습을 닫고 처음 위치부터 새로 잰다.
+    // 주차하며 R·D를 잠깐 오가는 것으로는 닫지 않는다
+    if (!tripActive && review != null && v >= DEPART_KPH) closeReview()
+    if (driving && !tripActive && review == null && spots.isNotEmpty()) startTrip()
     if (!tripActive) return
 
     if (v > 0.5f) traveledM += v / 3.6 * dt
@@ -200,7 +230,7 @@ class RoadSession(context: Context) {
     } else {
       val since = parkedSince ?: now.also { parkedSince = it }
       val allPassed = spots.isEmpty() || traveledM >= spots.last().atM + Review.AFTER_M
-      if (now - since >= END_PARKED_MS && (allPassed || arrived)) endTrip()
+      if (now - since >= END_PARKED_MS && (allPassed || arrived || routeGone)) endTrip()
     }
   }
 
@@ -208,6 +238,8 @@ class RoadSession(context: Context) {
     Log.i(TAG, "주행 시작: 어려운 곳 ${spots.size}곳")
     tripActive = true
     arrived = false
+    routeGone = false
+    previewDone = false
     review = null
     events.clear()
     eventPlaces.clear()
@@ -216,17 +248,17 @@ class RoadSession(context: Context) {
     voice.stop()
   }
 
-  /** 지난번 급제동한 곳은 2km 전에 한 번, 모든 곳은 1km 전에 한 번 말한다 */
+  /** 지난번 급제동한 곳은 3km 전에 한 번, 모든 곳은 1.5km 전에 한 번 말한다 (내비의 1km 안내보다 먼저) */
   private fun announce() {
     for (spot in spots) {
       val ahead = spot.atM - traveledM
       if (ahead < 0) continue
       val past = pastOf(spot)
-      if (past != null && ahead <= EARLY_M && ahead > NEAR_M && announced.add(spot.key + "@2k")) {
+      if (past != null && ahead <= EARLY_M && ahead > NEAR_M && announced.add(spot.key + "@early")) {
         voice.speak("${Script.spoken(ahead)} 앞 ${spot.name}. ${Script.dayWord(past.atMillis, System.currentTimeMillis())} 급히 줄였던 곳이에요. 미리 준비해요.")
         return
       }
-      if (ahead <= NEAR_M && ahead > TOO_CLOSE_M && announced.add(spot.key + "@1k")) {
+      if (ahead <= NEAR_M && ahead > TOO_CLOSE_M && announced.add(spot.key + "@near")) {
         voice.speak("${Script.spoken(ahead)} 앞 ${spot.name}. ${Script.now(spot)}.")
         return
       }
@@ -276,7 +308,10 @@ class RoadSession(context: Context) {
 
   // region 시연용
 
-  fun demoRoute() = navi.requestRoute(DEMO_LAT, DEMO_LON, DEMO_NAME)
+  fun demoRoute() {
+    demo = false
+    navi.requestRoute(DEMO_LAT, DEMO_LON, DEMO_NAME)
+  }
 
   /**
    * 시연용: 내비 대신 판교역 → 광교 갤러리아 회전 안내 목록을 넣는다.
@@ -284,6 +319,7 @@ class RoadSession(context: Context) {
    */
   fun loadDemoSteps() {
     Log.i(TAG, "시연용 경로 목록을 넣음 (내비 대신)")
+    demo = true
     destination = Destination(DEMO_NAME, DEMO_STEPS.sumOf { it.lengthM }.toInt(), 27 * 60)
     destinationAtM = 0.0
     steps = emptyList()
@@ -329,8 +365,9 @@ class RoadSession(context: Context) {
     private const val TAG = "RoadSession"
     private const val TICK_MS = 200L
     private const val MAX_TRACE = 30_000
-    const val NEAR_M = 1_000.0
-    const val EARLY_M = 2_000.0
+    const val NEAR_M = 1_500.0
+    const val EARLY_M = 3_000.0
+    private const val DEPART_KPH = 20f
     private const val TOO_CLOSE_M = 150.0
     private const val PASSED_M = 50.0
     private const val END_PARKED_MS = 3_000L

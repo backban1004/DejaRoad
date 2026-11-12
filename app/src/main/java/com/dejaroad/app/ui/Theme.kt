@@ -39,7 +39,6 @@ object Palette {
   val textTertiary = Color(0xFF3C3E42)
   val onDark = Color(0xFFFFFFFF)
   val onDarkSecondary = Color(0xFFA7AAB0)
-  val onDarkTertiary = Color(0xFF8D9096)
   val onDarkLine = Color(0x1AFFFFFF)
 }
 

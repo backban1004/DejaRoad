@@ -29,7 +29,7 @@ object Script {
     }
   }
 
-  /** 주행 중 1km 전: 지금 할 일 한 문장 */
+  /** 주행 중 1.5km 전: 지금 할 일 한 문장 */
   fun now(spot: HardSpot): String {
     val side = sideWord(spot.side)
     return when (spot.kind) {
@@ -47,8 +47,12 @@ object Script {
 
   fun meters(m: Double): String = if (m >= 1000) "%.1fkm".format(m / 1000).replace(".0km", "km") else "${(m / 10).roundToInt() * 10}m"
 
-  /** 소리로 읽을 거리: 1킬로미터, 2킬로미터, 300미터 (100m 단위로 반올림) */
-  fun spoken(m: Double): String = if (m >= 950) "${((m / 1000) + 0.5).toInt().coerceAtLeast(1)}킬로미터" else "${((m / 100) + 0.5).toInt().coerceAtLeast(1) * 100}미터"
+  /** 소리로 읽을 거리: 1.5킬로미터, 3킬로미터, 300미터 (1km 넘으면 0.5km, 아래는 100m 단위로 반올림) */
+  fun spoken(m: Double): String {
+    if (m < 950) return "${((m / 100) + 0.5).toInt().coerceAtLeast(1) * 100}미터"
+    val halves = ((m / 500) + 0.5).toInt().coerceAtLeast(2)
+    return if (halves % 2 == 0) "${halves / 2}킬로미터" else "${halves / 2}.5킬로미터"
+  }
 
   fun km(m: Double): String = if (m >= 1000) "%.1f km".format(m / 1000) else "${(m / 10).roundToInt() * 10} m"
 
@@ -98,6 +102,6 @@ object Script {
         val p = past(s)?.let { " ${dayWord(it.atMillis, now)} 여기서 시속 ${it.fromKph}에서 ${it.toKph}킬로미터로 급히 줄였어요." } ?: ""
         "${order.getOrElse(i) { "다음" }}, ${minutes(s)}분 뒤 ${s.name}. ${advice(s)}$p"
       }
-    return ("오늘 길에 어려운 곳은 ${spots.size}곳이에요. " + body.joinToString(" ") + " 각 지점 1km 전에 다시 말씀드릴게요.").replace("1km", "1킬로미터").replace(Regex("""(\d+)m 만에"""), "$1미터 만에")
+    return ("오늘 길에 어려운 곳은 ${spots.size}곳이에요. " + body.joinToString(" ") + " 주행 중에는 각 지점 1.5km 전에 다시 말씀드릴게요.").replace(Regex("""(\d+(?:\.\d+)?)km"""), "$1킬로미터").replace(Regex("""(\d+)m 만에"""), "$1미터 만에")
   }
 }

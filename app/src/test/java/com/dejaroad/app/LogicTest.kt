@@ -134,7 +134,9 @@ class ScriptTest {
     assertEquals("300m", Script.meters(296.0))
     assertEquals("2km", Script.meters(2_000.0))
     assertEquals("1킬로미터", Script.spoken(1_020.0))
-    assertEquals("2킬로미터", Script.spoken(1_700.0))
+    assertEquals("1.5킬로미터", Script.spoken(1_480.0))
+    assertEquals("2킬로미터", Script.spoken(1_800.0))
+    assertEquals("3킬로미터", Script.spoken(2_960.0))
     assertEquals("300미터", Script.spoken(280.0))
   }
 }

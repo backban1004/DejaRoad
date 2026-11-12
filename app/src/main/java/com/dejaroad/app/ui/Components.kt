@@ -38,6 +38,9 @@ import com.dejaroad.app.SpotKind
 val CardShape = RoundedCornerShape(24.dp)
 val ButtonShape = RoundedCornerShape(20.dp)
 
+/** 이보다 좁으면 절반 창(Pleos 기본: 내비 옆 1:1, 세로 841dp)으로 보고 배치를 줄인다 */
+val NARROW = 1100.dp
+
 /** Pleos 버튼 인터랙션: 누르는 동안 95%로 줄고 배경이 한 단계 진해진다 */
 @Composable
 fun PressableSurface(onClick: () -> Unit, color: Color, pressedColor: Color, shape: Shape, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
