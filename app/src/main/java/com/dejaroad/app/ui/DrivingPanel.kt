@@ -1,14 +1,8 @@
 package com.dejaroad.app.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,15 +10,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,106 +36,126 @@ import com.dejaroad.app.RoadSession
 import com.dejaroad.app.Script
 import kotlin.math.roundToInt
 
+/** 주행 중: 앱 화면 전체를 쓰는 검은 안내판. 조작은 없다 */
+@Composable
+fun DrivingPanel(s: RoadSession) = DrivingBoard(s, ready = false)
+
 /**
- * 주행 중: 다음 어려운 곳 하나만 큰 글씨로. 조작은 없다.
- * 가장 크게 보이는 것은 '얼마나 남았는지'(거리), 그다음이 이름, 그다음이 지금 할 일.
+ * 검은 안내판. 가장 크게 보이는 것은 남은 거리, 그다음이 지점 이름, 그다음이 할 일.
+ * 지난번 급제동한 곳이면 그날 기록을 테두리 칸에 한 줄. 아래에 3km부터 차오르는 막대와 다음 지점.
+ * [ready]면 출발 전(예습을 마친 뒤)이라 다음 지점 대신 '목록 다시 보기' 버튼을 둔다.
  */
 @Composable
-fun DrivingPanel(s: RoadSession) {
+fun DrivingBoard(s: RoadSession, ready: Boolean) {
   val next = s.nextSpot
   val d = s.destination
-  val status = d?.let { dd -> s.minutesToDestination()?.let { "${dd.name}까지 ${it}분" } ?: dd.name }
-  BoxWithConstraints(Modifier.fillMaxSize()) {
+  BoxWithConstraints(Modifier.fillMaxSize().background(Palette.board)) {
     val narrow = maxWidth < NARROW
-    val side = if (narrow) 32.dp else 40.dp
-    Column(Modifier.fillMaxSize().padding(start = side, end = side, top = 32.dp, bottom = 36.dp)) {
-      AppHeader(status)
-      Column(Modifier.fillMaxWidth().weight(1f).padding(top = 26.dp).clip(CardShape).background(Palette.dark)) {
-        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = if (narrow) 48.dp else 72.dp), contentAlignment = Alignment.CenterStart) {
-          if (next == null) {
-            Column {
-              Text(if (s.spots.isEmpty()) "경로 안내를 켜면 어려운 곳을 미리 알려 드려요" else "어려운 곳을 모두 지났어요", style = Type.headlineS, color = Palette.onDark)
-              if (s.spots.isNotEmpty()) Text("편하게 도착하세요", style = Type.bodyL.copy(fontSize = 36.sp, lineHeight = 48.sp), color = Palette.onDarkSecondary, modifier = Modifier.padding(top = 22.dp))
-            }
-          } else if (narrow) {
-            Column {
-              SpotTile(next, 160.dp, strong = false, onDark = true)
-              NextText(s, next, Modifier.padding(top = 40.dp))
-            }
-          } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(72.dp)) {
-              SpotTile(next, 240.dp, strong = false, onDark = true)
-              NextText(s, next)
-            }
-          }
+    val side = if (narrow) 40.dp else 56.dp
+    Column(Modifier.fillMaxSize()) {
+      Row(Modifier.fillMaxWidth().padding(start = side, end = side, top = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (d != null) {
+          Text(d.name, style = Type.labelM.copy(fontSize = 26.sp, lineHeight = 32.sp), color = Palette.onDarkSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          s.minutesToDestination()?.let { Text("${it}분", style = Type.labelM.copy(fontSize = 26.sp, lineHeight = 32.sp), fontWeight = FontWeight.SemiBold, color = Palette.onDark, modifier = Modifier.padding(start = 10.dp)) }
         }
-        if (next != null) {
-          ApproachBar(s, next, narrow, Modifier.padding(start = if (narrow) 48.dp else 72.dp, end = if (narrow) 40.dp else 56.dp, bottom = 36.dp))
-          Divider(color = Palette.onDarkLine)
-          Row(Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 26.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Symbol(R.drawable.ic_volume_up, 30.dp, Palette.onDark)
-            Text(
-              if (spoken(s, next)) "소리로도 말씀드렸어요" else "화면을 보지 않아도 소리로 알려 드려요",
-              style = Type.labelM,
-              color = Palette.onDarkSecondary,
-              modifier = Modifier.weight(1f),
-            )
-            if (s.pastOf(next) != null) {
-              Symbol(R.drawable.ic_history, 28.dp, Palette.onDark)
-              Text("지난번 급히 줄였던 곳", style = Type.labelM, color = Palette.onDark, fontWeight = FontWeight.SemiBold)
+        Box(Modifier.weight(1f))
+        if (ready) Text("출발하면 안내 시작", style = Type.labelM.copy(fontSize = 26.sp, lineHeight = 32.sp), color = Palette.onDarkSecondary)
+      }
+      Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = side), contentAlignment = Alignment.CenterStart) {
+        when {
+          next == null -> Text(if (s.spots.isEmpty()) "내비 경로가 아직 없어요" else "도착까지 남은 지점이 없어요", style = Type.headlineS, color = Palette.onDark)
+          narrow ->
+            Column {
+              Symbol(spotIcon(next), 160.dp, Palette.onDark)
+              BoardText(s, next, narrow = true, modifier = Modifier.padding(top = 28.dp))
             }
-          }
+          else ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+              Symbol(spotIcon(next), 300.dp, Palette.onDark)
+              BoardText(s, next, narrow = false)
+            }
         }
       }
-      val after = next?.let { n -> s.spots.firstOrNull { it.atM > n.atM } }
-      if (after != null) {
-        Row(Modifier.padding(top = 22.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-          Symbol(R.drawable.ic_alt_route, 30.dp, Palette.textSecondary)
-          Text("다음", style = Type.labelM, fontWeight = FontWeight.SemiBold)
-          Text("${after.name}, ${s.minutesTo(after)}분 뒤", style = Type.labelM, color = Palette.textSecondary)
+      if (next != null) {
+        ApproachBar(s, next, narrow, Modifier.padding(horizontal = side))
+        Divider(Modifier.padding(top = 20.dp), color = Palette.boardLine)
+        if (ready) {
+          Row(Modifier.fillMaxWidth().padding(start = side, end = side, top = 24.dp, bottom = 36.dp), horizontalArrangement = Arrangement.End) {
+            WideButton("목록 다시 보기", dark = false, modifier = Modifier.width(if (narrow) 300.dp else 360.dp)) { s.reopenPreview() }
+          }
+        } else {
+          NextRow(s, next, Modifier.padding(start = side, end = side, top = 28.dp, bottom = 36.dp))
         }
       }
     }
   }
 }
 
-/** 거리(가장 크게) → 이름 → 지금 할 일 */
+/** 거리(가장 크게) → 이름과 종류 → 할 일 → 지난 기록 */
 @Composable
-private fun NextText(s: RoadSession, next: HardSpot, modifier: Modifier = Modifier) {
+private fun BoardText(s: RoadSession, next: HardSpot, narrow: Boolean, modifier: Modifier = Modifier) {
   val ahead = (next.atM - s.traveledM).coerceAtLeast(0.0)
+  val past = s.pastOf(next)
   Column(modifier) {
-    val (num, unit) = if (ahead >= 1000) "%.1f".format(ahead / 1000) to "km 앞" else "${(ahead / 10).roundToInt() * 10}" to "m 앞"
+    val (num, unit) = if (ahead >= 1000) "%.1f".format(ahead / 1000) to "km" else "${(ahead / 10).roundToInt() * 10}" to "m"
     Text(
       buildAnnotatedString {
         append(num)
-        withStyle(SpanStyle(fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Palette.onDarkSecondary, letterSpacing = 0.sp)) { append(" $unit") }
+        withStyle(SpanStyle(fontSize = if (narrow) 44.sp else 64.sp, fontWeight = FontWeight.SemiBold, color = Palette.onDarkSecondary, letterSpacing = 0.sp)) { append(" $unit") }
       },
-      style = Type.headlineL.copy(fontSize = 112.sp, lineHeight = 120.sp, letterSpacing = (-2).sp),
+      style = Type.headlineL.copy(fontSize = if (narrow) 150.sp else 220.sp, lineHeight = if (narrow) 150.sp else 200.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = if (narrow) (-5).sp else (-8).sp),
       color = Palette.onDark,
     )
-    Text(next.name, style = Type.headlineS.copy(fontSize = 56.sp, lineHeight = 68.sp), color = Palette.onDark, modifier = Modifier.padding(top = 10.dp))
     Text(
-      when {
-        ahead <= RoadSession.NEAR_M -> Script.now(next)
-        s.pastOf(next) != null && ahead <= RoadSession.EARLY_M -> "지난번 급히 줄였던 곳이에요. 미리 준비해요"
-        else -> "1.5km 전에 소리로 알려 드려요"
+      buildAnnotatedString {
+        append(Script.title(next))
+        val tag = Script.kindTag(next)
+        if (tag.isNotEmpty()) withStyle(SpanStyle(fontSize = if (narrow) 30.sp else 40.sp, fontWeight = FontWeight.Medium, color = Palette.onDarkSecondary, letterSpacing = (-0.5).sp)) { append("  $tag") }
       },
-      style = Type.bodyL.copy(fontSize = 36.sp, lineHeight = 48.sp),
-      color = Palette.button,
-      modifier = Modifier.padding(top = 22.dp),
+      style = Type.headlineL.copy(fontSize = if (narrow) 56.sp else 80.sp, lineHeight = if (narrow) 66.sp else 92.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp),
+      color = Palette.onDark,
+      modifier = Modifier.padding(top = 20.dp),
     )
+    Text(
+      if (ahead <= RoadSession.NEAR_M) Script.now(next) else Script.cue(next),
+      style = Type.bodyL.copy(fontSize = if (narrow) 32.sp else 40.sp, lineHeight = if (narrow) 42.sp else 52.sp),
+      color = Palette.onBoardText,
+      modifier = Modifier.padding(top = 12.dp),
+    )
+    if (past != null) {
+      Row(
+        Modifier.padding(top = if (narrow) 28.dp else 40.dp).border(2.dp, Palette.onDark, RoundedCornerShape(8.dp)).padding(start = 20.dp, end = 24.dp, top = 14.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+      ) {
+        Symbol(R.drawable.ic_history, if (narrow) 30.dp else 36.dp, Palette.onDark)
+        Text(
+          if (narrow) "${Script.date(past.atMillis)} ${past.fromKph} → ${past.toKph} 급제동" else "${Script.date(past.atMillis)} 여기서 ${past.fromKph} → ${past.toKph} km/h 급제동",
+          style = Type.bodyL.copy(fontSize = if (narrow) 26.sp else 30.sp, lineHeight = 36.sp),
+          fontWeight = FontWeight.SemiBold,
+          color = Palette.onDark,
+        )
+      }
+    }
   }
 }
 
-/** 이 곳을 이미 소리로 알렸는지 (1.5km 안, 또는 지난번 급제동한 곳은 3km 안) */
-private fun spoken(s: RoadSession, next: HardSpot): Boolean {
-  val ahead = next.atM - s.traveledM
-  return ahead <= RoadSession.NEAR_M || (s.pastOf(next) != null && ahead <= RoadSession.EARLY_M)
+/** 맨 아래: 그다음 지점 */
+@Composable
+private fun NextRow(s: RoadSession, next: HardSpot, modifier: Modifier) {
+  val after = s.spots.firstOrNull { it.atM > next.atM } ?: return
+  val style = Type.bodyL.copy(fontSize = 30.sp, lineHeight = 38.sp)
+  Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+    Symbol(spotIcon(after), 40.dp, Palette.onDarkSecondary)
+    Text("다음", style = style, color = Palette.onDarkSecondary)
+    Text(after.name, style = style, fontWeight = FontWeight.Bold, color = Palette.onDark, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+    Text("${Script.km((after.atM - s.traveledM).coerceAtLeast(0.0))} · ${s.minutesTo(after)}분", style = style, color = Palette.onDarkSecondary)
+  }
 }
 
 /**
- * 다가오는 막대: 3km 전부터 차오르고, 지난 기록 안내(3km)·데자로드 안내(1.5km)·내비 안내(1km) 자리에 눈금.
- * 데자로드가 내비보다 먼저 말한다는 것이 한눈에 보인다. 끝에는 그 곳의 길 모양 칸.
+ * 다가오는 막대: 3km 앞부터 차오르고, 지난 기록 안내(3km)·데자로드 안내(1.5km)·내비 안내(1km) 자리에 눈금.
+ * 지난 눈금은 희게, 아직인 눈금은 어둡게. 데자로드가 내비보다 먼저 말한다는 것이 한눈에 보인다.
  */
 @Composable
 private fun ApproachBar(s: RoadSession, next: HardSpot, narrow: Boolean, modifier: Modifier = Modifier) {
@@ -144,28 +166,33 @@ private fun ApproachBar(s: RoadSession, next: HardSpot, narrow: Boolean, modifie
   val naviF = ((window - NAVI_M) / window).toFloat()
   val past = s.pastOf(next) != null
   val measurer = rememberTextMeasurer()
-  val base = Type.labelM.copy(color = Palette.onDarkSecondary)
-  val strong = base.copy(color = Palette.onDark, fontWeight = FontWeight.SemiBold)
-  Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-    Canvas(Modifier.weight(1f).height(84.dp)) {
-      val barY = 26.dp.toPx()
-      val h = 20.dp.toPx()
-      val r = CornerRadius(h / 2)
-      drawRoundRect(Color(0xFF3A3C40), Offset(0f, barY - h / 2), Size(size.width, h), r)
-      if (progress > 0f) drawRoundRect(Palette.onDark, Offset(0f, barY - h / 2), Size(size.width * progress, h), r)
-      val tickColor = Palette.onDarkSecondary
-      for (f in listOf(0f, nearF, naviF)) {
-        drawRoundRect(tickColor, Offset(size.width * f - 2.dp.toPx(), barY - 20.dp.toPx()), Size(4.dp.toPx(), 40.dp.toPx()), CornerRadius(2.dp.toPx()))
-      }
-      val y = barY + 24.dp.toPx()
-      // 3km: 왼쪽 맞춤, 1.5km: 눈금에서 끝나게, 1km: 눈금에서 시작
-      val startText = if (past && !narrow) "3 km · 지난 기록 안내" else "3 km"
-      drawText(measurer.measure(startText, if (past && ahead <= window) strong else base), topLeft = Offset(0f, y))
-      val nearT = measurer.measure(if (narrow) "1.5 km 안내" else "1.5 km · 데자로드 안내", if (ahead <= RoadSession.NEAR_M) strong else base)
-      drawText(nearT, topLeft = Offset(size.width * nearF - nearT.size.width - 10.dp.toPx(), y))
-      drawText(measurer.measure(if (narrow) "1 km 내비" else "1 km · 내비 안내", base), topLeft = Offset(size.width * naviF + 10.dp.toPx(), y))
+  val soft = Type.labelM.copy(color = Palette.onDarkSecondary)
+  val bold = SpanStyle(color = Palette.onDark, fontWeight = FontWeight.SemiBold)
+  fun label(at: String, what: String) =
+    buildAnnotatedString {
+      withStyle(bold) { append(at) }
+      if (what.isNotEmpty()) append("  $what")
     }
-    SpotTile(next, 56.dp, strong = false, onDark = true)
+  Canvas(modifier.fillMaxWidth().height(84.dp)) {
+    val cy = 20.dp.toPx()
+    val h = 12.dp.toPx()
+    val r = CornerRadius(h / 2)
+    drawRoundRect(Palette.boardTrack, Offset(0f, cy - h / 2), Size(size.width, h), r)
+    if (progress > 0f) drawRoundRect(Palette.onDark, Offset(0f, cy - h / 2), Size(size.width * progress, h), r)
+    val tw = 3.dp.toPx()
+    for (f in listOf(0f, nearF, naviF, 1f)) {
+      val x = (size.width * f).coerceAtMost(size.width - tw)
+      drawRect(if (progress >= f && f < 1f) Palette.onDark else Palette.boardTickOff, Offset(x, 0f), Size(tw, 40.dp.toPx()))
+    }
+    val y = 50.dp.toPx()
+    val pad = 8.dp.toPx()
+    drawText(measurer.measure(label("3 km", if (past && !narrow) "지난 기록" else ""), soft), topLeft = Offset(0f, y))
+    drawText(measurer.measure(label("1.5 km", if (narrow) "" else "데자로드"), soft), topLeft = Offset(size.width * nearF - pad, y))
+    drawText(measurer.measure(label("1 km", if (narrow) "" else "내비"), soft), topLeft = Offset(size.width * naviF - pad, y))
+    if (!narrow) {
+      val end = measurer.measure(Script.title(next), soft)
+      drawText(end, topLeft = Offset(size.width - end.size.width, y))
+    }
   }
 }
 

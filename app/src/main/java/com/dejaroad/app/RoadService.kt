@@ -48,7 +48,7 @@ class RoadService : Service() {
       NotificationCompat.Builder(this, CHANNEL)
         .setSmallIcon(R.drawable.ic_alt_route)
         .setContentTitle(getString(R.string.app_name))
-        .setContentText("어려운 곳 1.5km 전에 소리로 알려 드려요")
+        .setContentText("합류·분기 1.5km 앞 음성 안내")
         .setContentIntent(open)
         .setOngoing(true)
         .build()

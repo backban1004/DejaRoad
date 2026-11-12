@@ -5,7 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** 지난번 어려운 곳에서 급히 줄였던 기록. [profile]은 그때 지점 앞뒤 속도(거리 기준, [SpeedProfile] 칸 수, 없으면 빈 목록) */
+/** 지난번 지점에서 급히 줄였던 기록. [profile]은 그때 지점 앞뒤 속도(거리 기준, [SpeedProfile] 칸 수, 없으면 빈 목록) */
 data class PastHard(
   val key: String,
   val name: String,
@@ -17,7 +17,7 @@ data class PastHard(
   val profile: List<Float?> = emptyList(),
 )
 
-/** 어려운 곳을 지난 기록 (급제동이 있었는지) */
+/** 지점을 지난 기록 (급제동이 있었는지) */
 data class Pass(val key: String, val atMillis: Long, val hard: Boolean)
 
 /** 운전자의 길 기억: 어디서 어려웠고, 그 뒤로 어떻게 지났는지 */

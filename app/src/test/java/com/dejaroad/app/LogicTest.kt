@@ -102,10 +102,10 @@ class ReviewTest {
     val rows = Review.rows(listOf(ic, jc, ex), listOf(brake), memory, 17_000.0)
     assertEquals(listOf(Outcome.BETTER, Outcome.HARD, Outcome.FIRST_OK), rows.map { it.outcome })
     assertEquals(2, rows[1].hardCount)
-    assertEquals("판교IC는 나아졌고, 신갈JC는 아직 어려웠어요", Review.headline(rows))
-    assertEquals("신갈JC가 아직 어려웠어요", Review.headline(rows.filter { it.outcome == Outcome.HARD }))
-    assertTrue(Review.detail(rows[0], tue, 45).endsWith("52→20 km/h로 급히 줄였는데, 오늘은 45 km/h 아래로 떨어지지 않았어요."))
-    assertEquals("2번째 급제동", Review.state(rows[1]))
+    assertEquals("급제동 1 · 나아짐 1 · 무난 1", Review.headline(rows))
+    assertEquals("급제동 1", Review.headline(rows.filter { it.outcome == Outcome.HARD }))
+    assertTrue(Review.detail(rows[0], tue, 45).endsWith("52 → 20 km/h · 오늘은 45 km/h 아래로 안 떨어짐"))
+    assertEquals("급제동 · 두 번째", Review.state(rows[1]))
   }
 
   @Test

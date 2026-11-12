@@ -20,16 +20,23 @@ import com.dejaroad.app.R
 
 /**
  * Pleos Connect 기본 UI에 맞춘 무채색 팔레트.
- * 강조색 없이 상태는 밝기(회색 ↔ 짙은 회색)로 구분한다.
+ * 강조색 없이 상태는 밝기와 모양(채운 네모 = 급제동 기록, 빈 네모 = 처음)으로 구분한다.
  */
 object Palette {
-  val background = Color(0xFFF6F7F8)
+  /** 앱 바탕. 카드를 띄우지 않고 흰 바탕 위에 가는 선으로만 나눈다 */
+  val background = Color(0xFFFFFFFF)
   val surface = Color(0xFFFFFFFF)
-  val button = Color(0xFFE9EAEC)
-  val buttonPressed = Color(0xFFDCDDE0)
+  val button = Color(0xFFECEEF0)
+  val buttonPressed = Color(0xFFDDDFE2)
   val dark = Color(0xFF1C1D1F)
   val darkPressed = Color(0xFF343538)
-  val divider = Color(0xFFECEDEF)
+  val divider = Color(0xFFE6E7EA)
+  /** 주행 안내판 (앱 화면 전체가 검다) */
+  val board = Color(0xFF0E0F10)
+  val boardLine = Color(0xFF26282B)
+  val boardTrack = Color(0xFF2A2C2F)
+  val boardTickOff = Color(0xFF55585D)
+  val onBoardText = Color(0xFFE8E9EB)
   /** 비어 있는 칸·체크 테두리 */
   val indicator = Color(0xFFD4D5D8)
   val segmentOff = Color(0xFFE3E5E8)

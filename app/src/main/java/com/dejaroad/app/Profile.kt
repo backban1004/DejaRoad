@@ -3,7 +3,7 @@ package com.dejaroad.app
 import kotlin.math.abs
 
 /**
- * 어려운 곳 앞뒤의 속도를 '거리' 기준으로 잰 것.
+ * 지점 앞뒤의 속도를 '거리' 기준으로 잰 것.
  * 지점 [Review.BEFORE_M] 전부터 [Review.AFTER_M] 뒤까지 [STEP_M]마다 평균 속도(없으면 null)와 브레이크를 밟았는지.
  * 거리 기준이라 지난번과 오늘을 같은 자리끼리 겹쳐 볼 수 있다.
  */

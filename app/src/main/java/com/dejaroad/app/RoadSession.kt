@@ -14,14 +14,22 @@ import kotlin.math.ceil
 enum class Mode { IDLE, PREVIEW, DRIVING, REVIEW }
 
 /** 도착 후 돌아보기: 줄마다 결과와, 곳마다 앞뒤 속도(거리 기준) */
-data class TripReview(val headline: String, val rows: List<ReviewRow>, val profiles: Map<String, SpeedProfile>, val endedAt: Long, val remembered: Boolean)
+data class TripReview(
+  val headline: String,
+  val rows: List<ReviewRow>,
+  val profiles: Map<String, SpeedProfile>,
+  val endedAt: Long,
+  val remembered: Boolean,
+  val destName: String? = null,
+  val startedAt: Long? = null,
+)
 
 /**
  * 데자로드의 중심.
- * - 내비 회전 안내 목록에서 어려운 곳을 고르고(예습)
+ * - 내비 회전 안내 목록에서 합류·분기 지점을 고르고(예습)
  * - 주행 중에는 속도를 이어 더해 경로 위 위치를 알고, 1.5km 전(지난번 급제동한 곳은 3km 전)에 소리로 알리고
  *   (내비가 1km 전에 스스로 안내하므로 겹치지 않게 그보다 먼저 말한다)
- * - 브레이크 페달과 속도로 급제동을 찾아, 도착하면 어려운 곳마다 어떻게 지났는지 남긴다(복습)
+ * - 브레이크 페달과 속도로 급제동을 찾아, 도착하면 지점마다 어떻게 지났는지 남긴다(복습)
  *
  * 앱에 하나만 있고, 화면(MainActivity)과 포그라운드 서비스(RoadService)가 함께 쓴다.
  */
@@ -39,7 +47,7 @@ class RoadSession(context: Context) {
     private set
   var destination by mutableStateOf<Destination?>(null)
     private set
-  /** 이번 경로의 어려운 곳. atM은 이번 주행 시작점부터 거리 */
+  /** 이번 경로의 지점. atM은 이번 주행 시작점부터 거리 */
   var spots by mutableStateOf<List<HardSpot>>(emptyList())
     private set
   /** 이번 주행에서 달린 거리 (속도를 이어 더한다) */
@@ -49,6 +57,9 @@ class RoadSession(context: Context) {
     private set
   /** '그냥 출발하기'를 눌러 예습 목록을 접었는지 */
   var previewDone by mutableStateOf(false)
+
+  /** 이번 주행의 목적지 이름 (도착하면 내비가 목적지를 지울 수 있어 출발할 때 받아 둔다) */
+  private var tripDest: String? = null
     private set
   /** 주행 기록 중인지. 중간에 세워도(휴게소, 신호) 주행 화면을 그대로 둔다 */
   var tripActive by mutableStateOf(false)
@@ -135,7 +146,7 @@ class RoadSession(context: Context) {
       val passed = spots.filter { it.atM <= traveledM }
       spots = passed + found.map { it.copy(atM = it.atM + traveledM) }.filter { f -> passed.none { it.key == f.key } }
     }
-    Log.i(TAG, "회전 안내 ${next.size}개 → 어려운 곳 ${spots.size}곳: " + next.joinToString { "${it.turn}/${it.side}/${it.lengthM.toInt()}m/${it.text}" })
+    Log.i(TAG, "회전 안내 ${next.size}개 → 지점 ${spots.size}곳: " + next.joinToString { "${it.turn}/${it.side}/${it.lengthM.toInt()}m/${it.text}" })
   }
 
   private fun onRouteGone() {
@@ -177,11 +188,11 @@ class RoadSession(context: Context) {
     return ceil(left / d.remainM * d.remainS / 60).toInt()
   }
 
-  /** 아직 안 지난 어려운 곳 */
+  /** 아직 안 지난 지점 */
   val upcoming: List<HardSpot>
     get() = spots.filter { it.atM > traveledM - PASSED_M }
 
-  /** 아직 안 지난 첫 어려운 곳 */
+  /** 아직 안 지난 첫 지점 */
   val nextSpot: HardSpot?
     get() = upcoming.firstOrNull()
 
@@ -191,8 +202,9 @@ class RoadSession(context: Context) {
 
   fun playPreview() {
     previewDone = false
-    val text = Script.preview(upcoming, ::minutesTo, ::pastOf, System.currentTimeMillis())
-    voice.speak(text)
+    val text = Script.preview(upcoming, ::minutesTo, ::pastOf, System.currentTimeMillis(), destination?.name, minutesToDestination())
+    // 끝까지 들으면 목록을 접고 출발 대기 안내판으로 넘어간다
+    voice.speak(text) { previewDone = true }
   }
 
   fun stopPreview() = voice.stop()
@@ -238,8 +250,9 @@ class RoadSession(context: Context) {
   }
 
   private fun startTrip() {
-    Log.i(TAG, "주행 시작: 어려운 곳 ${spots.size}곳")
+    Log.i(TAG, "주행 시작: 지점 ${spots.size}곳")
     tripActive = true
+    tripDest = destination?.name
     arrived = false
     routeGone = false
     previewDone = false
@@ -258,7 +271,7 @@ class RoadSession(context: Context) {
       if (ahead < 0) continue
       val past = pastOf(spot)
       if (past != null && ahead <= EARLY_M && ahead > NEAR_M && announced.add(spot.key + "@early")) {
-        voice.speak("${Script.spoken(ahead)} 앞 ${spot.name}. ${Script.dayWord(past.atMillis, System.currentTimeMillis())} 급히 줄였던 곳이에요. 미리 준비해요.")
+        voice.speak("${Script.spoken(ahead)} 앞 ${spot.name}. ${Script.dayWord(past.atMillis, System.currentTimeMillis())}엔 여기서 시속 ${past.toKph}까지 급히 줄였어요.")
         return
       }
       if (ahead <= NEAR_M && ahead > TOO_CLOSE_M && announced.add(spot.key + "@near")) {
@@ -287,7 +300,7 @@ class RoadSession(context: Context) {
     }
     memory = next
     store.save(next)
-    review = TripReview(Review.headline(rows), rows, profiles, now, rows.any { it.outcome == Outcome.HARD })
+    review = TripReview(Review.headline(rows), rows, profiles, now, rows.any { it.outcome == Outcome.HARD }, tripDest, trace.firstOrNull()?.atMillis)
     Log.i(TAG, "주행 끝: ${review?.headline} / " + rows.joinToString { "${it.spot.name}=${it.outcome}" })
   }
 

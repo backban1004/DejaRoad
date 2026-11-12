@@ -1,10 +1,70 @@
 package com.dejaroad.app
 
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
-/** 어려운 곳마다 화면에 쓰고 소리로 읽을 문장 */
+/** 지점마다 화면에 쓰고 소리로 읽을 말 */
 object Script {
+
+  /** 바로 앞 지점과 이만큼 안에 붙어 있으면 '이어서'로 읽는다 */
+  const val FOLLOW_M = 500.0
+
+  /** 화면 제목: "판교IC 합류" → "판교IC" (종류는 [kindTag]로 옆에 따로 쓴다) */
+  fun title(spot: HardSpot): String = spot.name.removeSuffix(" 합류").removeSuffix(" 출구")
+
+  /** 이름 옆 작은 글: 종류. 이름이 이미 종류 이름이면 비우고, 연속 회전은 꺾는 모양을 쓴다 */
+  fun kindTag(spot: HardSpot): String {
+    val side = sideWord(spot.side)
+    if (spot.kind == SpotKind.QUICK_TURNS) {
+      val a = turnWord(spot.side)
+      val b = turnWord(spot.nextSide ?: spot.side)
+      return spot.nextGapM?.let { "$a 후 ${meters(it)} $b" } ?: "$a 후 바로 $b"
+    }
+    if (spot.name == HardSpotFinder.kindLabel(spot.kind, spot.side)) return ""
+    return when (spot.kind) {
+      SpotKind.ENTER_HIGHWAY, SpotKind.MERGE -> "합류"
+      SpotKind.JUNCTION -> "$side 분기"
+      SpotKind.EXIT_HIGHWAY -> "출구"
+      SpotKind.ROUNDABOUT -> "회전교차로"
+      SpotKind.UTURN -> "유턴"
+      SpotKind.BESIDE_UNDERPASS -> "지하차도 옆길"
+      SpotKind.BESIDE_OVERPASS -> "고가차도 옆길"
+      SpotKind.INTO_UNDERPASS -> "지하차도"
+      SpotKind.INTO_OVERPASS -> "고가차도"
+      SpotKind.SHARP -> "$side 급회전"
+      SpotKind.QUICK_TURNS -> ""
+    }
+  }
+
+  private fun turnWord(side: Side) =
+    when (side) {
+      Side.LEFT -> "좌회전"
+      Side.RIGHT -> "우회전"
+      Side.CENTER -> "직진"
+    }
+
+  /** 화면에 쓰는 짧은 할 일 (문장 대신 표지판처럼) */
+  fun cue(spot: HardSpot): String {
+    val side = sideWord(spot.side)
+    return when (spot.kind) {
+      SpotKind.ENTER_HIGHWAY -> "진입로에서 충분히 가속"
+      SpotKind.JUNCTION -> "1km 전부터 $side 차로"
+      SpotKind.EXIT_HIGHWAY -> "1km 전부터 $side 끝 차로"
+      SpotKind.ROUNDABOUT -> "회전 중인 차 먼저 · ${exitWord(spot.side)} 진출"
+      SpotKind.UTURN -> "맨 왼쪽 차로 · 유턴 신호 확인"
+      SpotKind.BESIDE_UNDERPASS, SpotKind.BESIDE_OVERPASS -> "미리 $side 차로"
+      SpotKind.INTO_UNDERPASS, SpotKind.SHARP -> "들어가기 전 감속"
+      SpotKind.INTO_OVERPASS -> "차로 유지 · 오르기 전 감속"
+      SpotKind.MERGE -> "옆 차로 간격 보고 천천히"
+      SpotKind.QUICK_TURNS -> "꺾을 때부터 ${spot.nextSide?.let { sideWord(it) } ?: side} 차로"
+    }
+  }
+
+  /** 기록 날짜: "11/10 화" */
+  fun date(at: Long): String = SimpleDateFormat("M/d E", Locale.KOREA).format(Date(at))
 
   /** 출발 전 예습: 이 곳에서 무엇을 하면 되는지 */
   fun advice(spot: HardSpot): String {
@@ -56,8 +116,8 @@ object Script {
 
   fun km(m: Double): String = if (m >= 1000) "%.1f km".format(m / 1000) else "${(m / 10).roundToInt() * 10} m"
 
-  /** 지난 급제동을 한 줄로: "지난 화요일 여기서 74→41 km/h로 급히 줄였어요" */
-  fun pastLine(past: PastHard, now: Long): String = "${dayWord(past.atMillis, now)} 여기서 ${past.fromKph}→${past.toKph} km/h로 급히 줄였어요"
+  /** 지난 급제동 한 줄: "11/10 화 74→41 km/h" */
+  fun pastLine(past: PastHard): String = "${date(past.atMillis)} ${past.fromKph}→${past.toKph} km/h"
 
   /** 며칠 전인지 사람 말로: 오늘, 어제, 지난 화요일, 10월 3일 */
   fun dayWord(at: Long, now: Long): String {
@@ -93,15 +153,25 @@ object Script {
     return c.uppercaseChar() in "LMNR"
   }
 
-  /** 출발 전 1분 동안 읽어 줄 예습 */
-  fun preview(spots: List<HardSpot>, minutes: (HardSpot) -> Int, past: (HardSpot) -> PastHard?, now: Long): String {
-    if (spots.isEmpty()) return "오늘 길에는 특별히 어려운 곳이 없어요. 편하게 출발하세요."
-    val order = listOf("첫째", "둘째", "셋째", "넷째", "다섯째")
+  /**
+   * 출발 전 1분 동안 읽어 줄 예습. 몇 곳인지 세지 않고, 목적지와 시간 다음에 지점을 순서대로 읽는다.
+   * 예: "광교 갤러리아까지 27분이에요. 3분 뒤 판교IC 합류. 지난 화요일엔 여기서 시속 52에서 20까지 급히 줄였어요. …"
+   */
+  fun preview(spots: List<HardSpot>, minutes: (HardSpot) -> Int, past: (HardSpot) -> PastHard?, now: Long, dest: String? = null, totalMin: Int? = null): String {
+    val head = if (dest != null && totalMin != null) "${dest}까지 ${totalMin}분이에요." else ""
+    if (spots.isEmpty()) return "$head 합류나 분기 없이 가는 길이에요.".trim()
     val body =
       spots.mapIndexed { i, s ->
-        val p = past(s)?.let { " ${dayWord(it.atMillis, now)} 여기서 시속 ${it.fromKph}에서 ${it.toKph}킬로미터로 급히 줄였어요." } ?: ""
-        "${order.getOrElse(i) { "다음" }}, ${minutes(s)}분 뒤 ${s.name}. ${advice(s)}$p"
+        val gap = if (i > 0) s.atM - spots[i - 1].atM else null
+        val at = if (gap != null && gap < FOLLOW_M) "이어서 ${meters(gap)} 뒤" else "${minutes(s)}분 뒤"
+        val p = past(s)?.let { " ${dayWord(it.atMillis, now)}엔 여기서 시속 ${it.fromKph}에서 ${it.toKph}까지 급히 줄였어요." } ?: ""
+        "$at ${s.name}.$p ${advice(s)}"
       }
-    return ("오늘 길에 어려운 곳은 ${spots.size}곳이에요. " + body.joinToString(" ") + " 주행 중에는 각 지점 1.5km 전에 다시 말씀드릴게요.").replace(Regex("""(\d+(?:\.\d+)?)km"""), "$1킬로미터").replace(Regex("""(\d+)m 만에"""), "$1미터 만에")
+    return (listOf(head) + body + "가면서 1.5km 앞에서 다시 알려 드릴게요.")
+      .filter { it.isNotBlank() }
+      .joinToString(" ")
+      .replace(Regex("""(\d+(?:\.\d+)?)km"""), "$1킬로미터")
+      .replace(Regex("""(\d+)m 뒤"""), "$1미터 뒤")
+      .replace(Regex("""(\d+)m 만에"""), "$1미터 만에")
   }
 }

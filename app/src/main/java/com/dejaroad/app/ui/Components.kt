@@ -35,8 +35,8 @@ import com.dejaroad.app.R
 import com.dejaroad.app.Side
 import com.dejaroad.app.SpotKind
 
-val CardShape = RoundedCornerShape(24.dp)
-val ButtonShape = RoundedCornerShape(20.dp)
+/** 버튼 모서리. 큰 둥근 카드 대신 작은 모서리로 차 화면 버튼처럼 */
+val ButtonShape = RoundedCornerShape(12.dp)
 
 /** 이보다 좁으면 절반 창(Pleos 기본: 내비 옆 1:1, 세로 841dp)으로 보고 배치를 줄인다 */
 val NARROW = 1100.dp
@@ -63,16 +63,6 @@ fun Symbol(@DrawableRes id: Int, size: Dp, tint: Color = Palette.textPrimary, mo
   Icon(painterResource(id), contentDescription = null, tint = tint, modifier = modifier.size(size))
 }
 
-/** 화면 위쪽 머리글: 앱 이름 + 오른쪽 상태 글 */
-@Composable
-fun AppHeader(status: String? = null) {
-  Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-    Text("데자로드", style = Type.titleS, fontWeight = FontWeight.Bold)
-    Box(Modifier.weight(1f))
-    if (status != null) Text(status, style = Type.labelM, color = Palette.textSecondary)
-  }
-}
-
 /** 넓은 버튼 (짙은 기본 동작 / 회색 보조 동작) */
 @Composable
 fun WideButton(text: String, dark: Boolean, modifier: Modifier = Modifier, @DrawableRes icon: Int? = null, onClick: () -> Unit) {
@@ -89,7 +79,7 @@ fun Divider(modifier: Modifier = Modifier, color: Color = Palette.divider) {
   Box(modifier.fillMaxWidth().height(1.dp).background(color))
 }
 
-/** 어려운 곳 종류를 나타내는 길 모양 아이콘 */
+/** 지점 종류를 나타내는 길 모양 아이콘 */
 @DrawableRes
 fun spotIcon(spot: HardSpot): Int {
   val right = spot.side != Side.LEFT
@@ -105,21 +95,10 @@ fun spotIcon(spot: HardSpot): Int {
   }
 }
 
-/**
- * 길 모양 칸. 내비가 차로 수를 주지 않으므로 차로 그림 대신 어느 쪽으로 가는지만 크게 보여 준다.
- * [strong]이면(지난번 급제동한 곳) 짙은 칸에 흰 아이콘.
- */
+/** 세로 구분선 */
 @Composable
-fun SpotTile(spot: HardSpot, size: Dp, strong: Boolean, onDark: Boolean = false) {
-  val bg = when {
-    onDark -> Palette.onDark
-    strong -> Palette.dark
-    else -> Palette.segmentOff
-  }
-  val fg = if (onDark || !strong) Palette.textPrimary else Palette.onDark
-  Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.2f)).background(bg), contentAlignment = Alignment.Center) {
-    Symbol(spotIcon(spot), size * 0.56f, fg)
-  }
+fun VLine(height: Dp, modifier: Modifier = Modifier, color: Color = Palette.divider) {
+  Box(modifier.width(1.dp).height(height).background(color))
 }
 
 @Composable

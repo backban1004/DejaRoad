@@ -14,11 +14,11 @@ enum class Side { LEFT, RIGHT, CENTER }
  */
 data class Step(val turn: Turn, val side: Side, val lengthM: Double, val text: String)
 
-/** 어려운 곳의 종류. 화면 아이콘과 안내 문장을 정한다 */
+/** 지점의 종류. 화면 아이콘과 안내 문장을 정한다 */
 enum class SpotKind { ENTER_HIGHWAY, JUNCTION, EXIT_HIGHWAY, ROUNDABOUT, UTURN, BESIDE_UNDERPASS, BESIDE_OVERPASS, INTO_UNDERPASS, INTO_OVERPASS, MERGE, SHARP, QUICK_TURNS }
 
 /**
- * 경로 위의 어려운 곳.
+ * 경로 위의 지점 (합류·분기·출구·회전교차로·연속 회전 등).
  * @param atM 경로 목록을 받은 위치부터 그 지점까지 거리
  * @param key 다음에 같은 곳을 알아보기 위한 이름 (안내 문구 + 종류 + 방향)
  */
@@ -35,11 +35,11 @@ data class HardSpot(
 )
 
 /**
- * 내비 회전 안내 목록에서 초보 운전자에게 어려운 곳을 고른다.
+ * 내비 회전 안내 목록에서 초보 운전자가 당황하기 쉬운 지점을 고른다.
  *
  * 내비는 차로 수나 경로 좌표를 주지 않으므로 안내 종류와 구간 길이만으로 판단한다.
- * - 고속도로 합류·분기점·회전교차로처럼 그 자체로 어려운 곳
- * - 평범한 회전이라도 다음 안내가 [QUICK_GAP_M] 안에 이어지면 차로를 미리 옮겨야 하므로 어려운 곳
+ * - 고속도로 합류·분기점·회전교차로처럼 그 자체로 까다로운 지점
+ * - 평범한 회전이라도 다음 안내가 [QUICK_GAP_M] 안에 이어지면 차로를 미리 옮겨야 하므로 넣는다
  * - 지난번에 급제동한 곳([pastKeys])은 점수를 크게 더해 꼭 넣는다
  */
 object HardSpotFinder {
@@ -70,7 +70,7 @@ object HardSpotFinder {
       .sortedBy { it.atM }
   }
 
-  /** 안내 지점이 어떤 어려운 곳인지. 평범한 곳이면 null */
+  /** 안내 지점이 어떤 지점인지. 평범한 곳이면 null */
   fun kindOf(step: Step, gapToNextM: Double?): SpotKind? =
     when (step.turn) {
       Turn.ENTER_IC -> SpotKind.ENTER_HIGHWAY
