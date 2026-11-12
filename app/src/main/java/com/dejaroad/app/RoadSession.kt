@@ -271,7 +271,7 @@ class RoadSession(context: Context) {
       if (ahead < 0) continue
       val past = pastOf(spot)
       if (past != null && ahead <= EARLY_M && ahead > NEAR_M && announced.add(spot.key + "@early")) {
-        voice.speak("${Script.spoken(ahead)} 앞 ${spot.name}. ${Script.dayWord(past.atMillis, System.currentTimeMillis())}엔 여기서 시속 ${past.toKph}까지 급히 줄였어요.")
+        voice.speak("${Script.spoken(ahead)} 앞 ${spot.name}. 지난번 급하게 줄였던 곳이에요. ${Script.early(spot)}.")
         return
       }
       if (ahead <= NEAR_M && ahead > TOO_CLOSE_M && announced.add(spot.key + "@near")) {

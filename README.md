@@ -8,9 +8,13 @@
 |---|---|---|
 | ![예습](captures/01_예습.png) | ![주행](captures/11_주행_3km전_지난기록.png) | ![복습](captures/14_도착_복습.png) |
 
+## 시연 영상
+
+[`demo/DejaRoad_demo.mp4`](demo/DejaRoad_demo.mp4) (2분 32초): Pleos Connect 에뮬레이터 실제 화면 녹화. 출발 전 예습 → 미리 듣기 → 주행 중 3km·1.5km 앞 안내 → 급제동 → 도착 후 복습 → 다음 번 예습. 주행 일부는 4배속이고, 소리는 앱이 실제로 낸 음성 안내 문장(앱 로그)을 PC 한국어 음성으로 다시 읽은 것입니다(에뮬레이터 화면 녹화에는 소리가 담기지 않음). 녹화·편집 스크립트는 `tools/record_demo.py`, `tools/make_video.py`.
+
 ## APK
 
-- 위치: [`apk/`](apk/) 폴더의 `팀명_DejaRoad_release.apk`
+- 위치: [`apk/`](apk/) 폴더의 `데자로드_DejaRoad_release.apk`
 - 패키지 이름: `com.dejaroad.app`, 버전 0.1.0 (versionCode 1)
 
 ## 실행 방법
@@ -20,7 +24,7 @@
 Pleos Connect 에뮬레이터를 켠 뒤:
 
 ```bash
-adb install -r -g --user 10 apk/팀명_DejaRoad_release.apk
+adb install -r -g --user 10 apk/데자로드_DejaRoad_release.apk
 adb shell am start --user 10 -n com.dejaroad.app/.MainActivity
 ```
 
@@ -34,10 +38,10 @@ adb shell am start --user 10 -n com.dejaroad.app/.MainActivity
 adb install -r -g --user 10 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-release APK는 서명 키가 있어야 합니다. 프로젝트 루트에 `keystore.properties`를 만들고(`keystore.properties.example` 참고) 아래 명령을 실행하면 `apk/팀명_DejaRoad_release.apk`로 복사됩니다.
+release APK는 서명 키가 있어야 합니다. 프로젝트 루트에 `keystore.properties`를 만들고(`keystore.properties.example` 참고) 아래 명령을 실행하면 `apk/데자로드_DejaRoad_release.apk`로 복사됩니다.
 
 ```bash
-./gradlew :app:exportReleaseApk -PteamName=팀명
+./gradlew :app:exportReleaseApk -PteamName=데자로드
 ```
 
 ### 시연 순서 (에뮬레이터)

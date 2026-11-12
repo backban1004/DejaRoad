@@ -103,6 +103,17 @@ object Script {
     }
   }
 
+  /** 지난번 급제동한 곳 3km 앞: 지난 실패를 되새기기보다 지금부터 할 준비를 말한다 */
+  fun early(spot: HardSpot): String {
+    val side = sideWord(spot.side)
+    return when (spot.kind) {
+      SpotKind.ENTER_HIGHWAY, SpotKind.MERGE -> "진입로에서 속도를 충분히 올릴 준비를 해요"
+      SpotKind.JUNCTION, SpotKind.EXIT_HIGHWAY, SpotKind.BESIDE_UNDERPASS, SpotKind.BESIDE_OVERPASS -> "지금부터 천천히 $side 차로로 옮겨 두면 돼요"
+      SpotKind.UTURN -> "지금부터 천천히 맨 왼쪽 차로로 옮겨 두면 돼요"
+      else -> "미리 속도를 줄일 준비를 해요"
+    }
+  }
+
   private fun exitWord(side: Side) = if (side == Side.LEFT) "왼쪽으로" else if (side == Side.RIGHT) "오른쪽으로" else "안내한 쪽으로"
 
   fun meters(m: Double): String = if (m >= 1000) "%.1fkm".format(m / 1000).replace(".0km", "km") else "${(m / 10).roundToInt() * 10}m"
