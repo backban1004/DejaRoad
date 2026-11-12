@@ -102,7 +102,9 @@ class ReviewTest {
     val rows = Review.rows(listOf(ic, jc, ex), listOf(brake), memory, 17_000.0)
     assertEquals(listOf(Outcome.BETTER, Outcome.HARD, Outcome.FIRST_OK), rows.map { it.outcome })
     assertEquals(2, rows[1].hardCount)
-    assertEquals("신갈JC가 아직 어려웠어요", Review.headline(rows))
+    assertEquals("판교IC는 나아졌고, 신갈JC는 아직 어려웠어요", Review.headline(rows))
+    assertEquals("신갈JC가 아직 어려웠어요", Review.headline(rows.filter { it.outcome == Outcome.HARD }))
+    assertTrue(Review.detail(rows[0], tue, 45).endsWith("52→20 km/h로 급히 줄였는데, 오늘은 45 km/h 아래로 떨어지지 않았어요."))
     assertEquals("2번째 급제동", Review.state(rows[1]))
   }
 
@@ -140,3 +142,20 @@ class ScriptTest {
     assertEquals("300미터", Script.spoken(280.0))
   }
 }
+
+class ProfileTest {
+  @Test
+  fun cutsSpeedAroundSpotByDistance() {
+    // 지점 1000m, 500m부터 1100m까지 초당 20m로 달리며 750m 부근에서 브레이크
+    val ticks = (0..30).map { i -> val at = 500.0 + i * 20; Tick(i * 1000L, if (at in 740.0..800.0) 30f else 60f, at in 740.0..800.0, at) }
+    val p = SpeedProfile.of(ticks, 1_000.0)
+    assertEquals(SpeedProfile.SIZE, p.speeds.size)
+    // 800m 전(200m 지점)은 기록이 없다
+    assertEquals(null, p.speeds[0])
+    assertEquals(60f, p.speeds[SpeedProfile.SPOT_INDEX])
+    assertEquals(30, p.minKph)
+    assertEquals(true, p.brakes[(750 - 200) / 25])
+    assertEquals(false, p.brakes[SpeedProfile.SPOT_INDEX])
+  }
+}
+

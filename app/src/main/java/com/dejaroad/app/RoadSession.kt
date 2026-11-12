@@ -13,8 +13,8 @@ import kotlin.math.ceil
 /** 지금 보여 줄 화면 */
 enum class Mode { IDLE, PREVIEW, DRIVING, REVIEW }
 
-/** 도착 후 돌아보기: 줄마다 결과와, 급제동한 곳은 앞뒤 20초 속도 */
-data class TripReview(val headline: String, val rows: List<ReviewRow>, val traces: Map<String, List<Tick>>, val endedAt: Long, val remembered: Boolean)
+/** 도착 후 돌아보기: 줄마다 결과와, 곳마다 앞뒤 속도(거리 기준) */
+data class TripReview(val headline: String, val rows: List<ReviewRow>, val profiles: Map<String, SpeedProfile>, val endedAt: Long, val remembered: Boolean)
 
 /**
  * 데자로드의 중심.
@@ -159,6 +159,9 @@ class RoadSession(context: Context) {
 
   fun pastOf(spot: HardSpot): PastHard? = memory.lastHard(spot.key)
 
+  /** 이번 주행 기준 도착 지점(m). 내비가 남은 거리를 알려 준 때의 위치 + 그때 남은 거리 */
+  fun routeEndM(): Double? = destination?.takeIf { it.remainM > 0 }?.let { destinationAtM + it.remainM }
+
   /** 목적지까지 남은 거리: 내비가 알려 준 남은 거리에서 그 뒤에 달린 만큼 뺀다 */
   fun remainingM(): Double? {
     val d = destination ?: return null
@@ -271,16 +274,20 @@ class RoadSession(context: Context) {
     tripActive = false
     val now = System.currentTimeMillis()
     val rows = Review.rows(spots, events, memory, traveledM)
-    // 급제동한 곳마다 밟기 8초 전부터 12초 뒤까지 속도
-    val traces = rows.mapNotNull { r -> r.event?.let { e -> r.spot.key to trace.filter { it.atMillis in (e.startMillis - 8_000)..(e.startMillis + 12_000) } } }.toMap()
+    // 곳마다 800m 전부터 150m 뒤까지 속도 (지난번과 같은 자리끼리 겹쳐 보려고 거리 기준)
+    val profiles = rows.associate { r -> r.spot.key to SpeedProfile.of(trace, r.spot.atM) }
     var next = memory
     for (r in rows) {
-      val hard = r.event?.let { e -> eventPlaces[e].let { p -> PastHard(r.spot.key, r.spot.name, now, e.fromKph, e.toKph, p?.first, p?.second) } }
+      val hard =
+        r.event?.let { e ->
+          val p = eventPlaces[e]
+          PastHard(r.spot.key, r.spot.name, now, e.fromKph, e.toKph, p?.first, p?.second, profiles[r.spot.key]?.speeds ?: emptyList())
+        }
       next = next.plus(hard, Pass(r.spot.key, now, hard != null))
     }
     memory = next
     store.save(next)
-    review = TripReview(Review.headline(rows), rows, traces, now, rows.any { it.outcome == Outcome.HARD })
+    review = TripReview(Review.headline(rows), rows, profiles, now, rows.any { it.outcome == Outcome.HARD })
     Log.i(TAG, "주행 끝: ${review?.headline} / " + rows.joinToString { "${it.spot.name}=${it.outcome}" })
   }
 
@@ -332,7 +339,11 @@ class RoadSession(context: Context) {
     val tuesday = now - daysSinceTuesday(now) * 86_400_000L - 3 * 3_600_000L
     val jc = spots.firstOrNull { it.kind == SpotKind.JUNCTION } ?: spots.getOrNull(1) ?: spots.firstOrNull()
     val ic = spots.firstOrNull { it.kind == SpotKind.ENTER_HIGHWAY && it != jc }
-    val add = listOfNotNull(jc?.let { PastHard(it.key, it.name, tuesday, 74, 41, null, null) }, ic?.let { PastHard(it.key, it.name, tuesday, 52, 20, null, null) })
+    val add =
+      listOfNotNull(
+        jc?.let { PastHard(it.key, it.name, tuesday, 74, 41, null, null, SpeedProfile.demo(74, 41, 600.0).speeds) },
+        ic?.let { PastHard(it.key, it.name, tuesday, 52, 20, null, null, SpeedProfile.demo(52, 20, 250.0).speeds) },
+      )
     memory = RoadMemory(hards = add, passes = add.map { Pass(it.key, tuesday, true) })
     store.save(memory)
     Log.i(TAG, "지난 기록 넣음: " + add.joinToString { it.name })

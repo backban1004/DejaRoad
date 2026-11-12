@@ -1,6 +1,14 @@
 package com.dejaroad.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +32,7 @@ import com.dejaroad.app.HardSpot
 import com.dejaroad.app.R
 import com.dejaroad.app.RoadSession
 import com.dejaroad.app.Script
+import kotlin.math.roundToInt
 
 /**
  * 주행 중: 다음 어려운 곳 하나만 큰 글씨로. 조작은 없다.
@@ -59,6 +68,7 @@ fun DrivingPanel(s: RoadSession) {
           }
         }
         if (next != null) {
+          ApproachBar(s, next, narrow, Modifier.padding(start = if (narrow) 48.dp else 72.dp, end = if (narrow) 40.dp else 56.dp, bottom = 36.dp))
           Divider(color = Palette.onDarkLine)
           Row(Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 26.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Symbol(R.drawable.ic_volume_up, 30.dp, Palette.onDark)
@@ -92,12 +102,13 @@ fun DrivingPanel(s: RoadSession) {
 private fun NextText(s: RoadSession, next: HardSpot, modifier: Modifier = Modifier) {
   val ahead = (next.atM - s.traveledM).coerceAtLeast(0.0)
   Column(modifier) {
+    val (num, unit) = if (ahead >= 1000) "%.1f".format(ahead / 1000) to "km 앞" else "${(ahead / 10).roundToInt() * 10}" to "m 앞"
     Text(
       buildAnnotatedString {
-        append(Script.km(ahead))
-        withStyle(SpanStyle(fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Palette.onDarkSecondary)) { append(" 앞") }
+        append(num)
+        withStyle(SpanStyle(fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Palette.onDarkSecondary, letterSpacing = 0.sp)) { append(" $unit") }
       },
-      style = Type.headlineL.copy(fontSize = 96.sp, lineHeight = 108.sp),
+      style = Type.headlineL.copy(fontSize = 112.sp, lineHeight = 120.sp, letterSpacing = (-2).sp),
       color = Palette.onDark,
     )
     Text(next.name, style = Type.headlineS.copy(fontSize = 56.sp, lineHeight = 68.sp), color = Palette.onDark, modifier = Modifier.padding(top = 10.dp))
@@ -119,3 +130,44 @@ private fun spoken(s: RoadSession, next: HardSpot): Boolean {
   val ahead = next.atM - s.traveledM
   return ahead <= RoadSession.NEAR_M || (s.pastOf(next) != null && ahead <= RoadSession.EARLY_M)
 }
+
+/**
+ * 다가오는 막대: 3km 전부터 차오르고, 지난 기록 안내(3km)·데자로드 안내(1.5km)·내비 안내(1km) 자리에 눈금.
+ * 데자로드가 내비보다 먼저 말한다는 것이 한눈에 보인다. 끝에는 그 곳의 길 모양 칸.
+ */
+@Composable
+private fun ApproachBar(s: RoadSession, next: HardSpot, narrow: Boolean, modifier: Modifier = Modifier) {
+  val ahead = (next.atM - s.traveledM).coerceAtLeast(0.0)
+  val window = RoadSession.EARLY_M
+  val progress = ((window - ahead) / window).toFloat().coerceIn(0f, 1f)
+  val nearF = ((window - RoadSession.NEAR_M) / window).toFloat()
+  val naviF = ((window - NAVI_M) / window).toFloat()
+  val past = s.pastOf(next) != null
+  val measurer = rememberTextMeasurer()
+  val base = Type.labelM.copy(color = Palette.onDarkSecondary)
+  val strong = base.copy(color = Palette.onDark, fontWeight = FontWeight.SemiBold)
+  Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Canvas(Modifier.weight(1f).height(84.dp)) {
+      val barY = 26.dp.toPx()
+      val h = 20.dp.toPx()
+      val r = CornerRadius(h / 2)
+      drawRoundRect(Color(0xFF3A3C40), Offset(0f, barY - h / 2), Size(size.width, h), r)
+      if (progress > 0f) drawRoundRect(Palette.onDark, Offset(0f, barY - h / 2), Size(size.width * progress, h), r)
+      val tickColor = Palette.onDarkSecondary
+      for (f in listOf(0f, nearF, naviF)) {
+        drawRoundRect(tickColor, Offset(size.width * f - 2.dp.toPx(), barY - 20.dp.toPx()), Size(4.dp.toPx(), 40.dp.toPx()), CornerRadius(2.dp.toPx()))
+      }
+      val y = barY + 24.dp.toPx()
+      // 3km: 왼쪽 맞춤, 1.5km: 눈금에서 끝나게, 1km: 눈금에서 시작
+      val startText = if (past && !narrow) "3 km · 지난 기록 안내" else "3 km"
+      drawText(measurer.measure(startText, if (past && ahead <= window) strong else base), topLeft = Offset(0f, y))
+      val nearT = measurer.measure(if (narrow) "1.5 km 안내" else "1.5 km · 데자로드 안내", if (ahead <= RoadSession.NEAR_M) strong else base)
+      drawText(nearT, topLeft = Offset(size.width * nearF - nearT.size.width - 10.dp.toPx(), y))
+      drawText(measurer.measure(if (narrow) "1 km 내비" else "1 km · 내비 안내", base), topLeft = Offset(size.width * naviF + 10.dp.toPx(), y))
+    }
+    SpotTile(next, 56.dp, strong = false, onDark = true)
+  }
+}
+
+/** 내비가 스스로 안내하는 거리 (국내 내비의 흔한 1km 안내. 에뮬레이터 내비로는 아직 확인 못 함) */
+private const val NAVI_M = 1_000.0

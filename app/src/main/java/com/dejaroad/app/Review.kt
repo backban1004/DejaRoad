@@ -56,6 +56,8 @@ object Review {
     val hard = rows.firstOrNull { it.outcome == Outcome.HARD }
     val better = rows.firstOrNull { it.outcome == Outcome.BETTER }
     return when {
+      hard != null && better != null ->
+        "${Script.eunNeun(better.spot.name)} 나아졌고, ${Script.eunNeun(hard.spot.name)} ${if (hard.hardCount > 1) "아직 " else ""}어려웠어요"
       hard != null && hard.hardCount > 1 -> "${Script.iGa(hard.spot.name)} 아직 어려웠어요"
       hard != null -> "${Script.iGa(hard.spot.name)} 어려웠어요"
       better != null -> "${Script.eunNeun(better.spot.name)} 이번엔 부드럽게 지났어요"
@@ -64,8 +66,8 @@ object Review {
     }
   }
 
-  /** 줄마다 설명 */
-  fun detail(row: ReviewRow, now: Long): String =
+  /** 줄마다 설명. [todayMin]은 오늘 그 곳 앞뒤에서 가장 낮았던 속도(알면) */
+  fun detail(row: ReviewRow, now: Long, todayMin: Int? = null): String =
     when (row.outcome) {
       Outcome.HARD -> {
         val e = row.event!!
@@ -73,7 +75,11 @@ object Review {
         val same = row.before?.let { " ${Script.gwaWa(Script.dayWord(it.atMillis, now))} 같은 곳이에요." } ?: ""
         "$where ${e.fromKph}→${e.toKph} km/h로 브레이크를 세게 밟았어요.$same"
       }
-      Outcome.BETTER -> row.before?.let { "${Script.dayWord(it.atMillis, now)}엔 ${it.fromKph}→${it.toKph} km/h로 급히 줄였는데, 오늘은 급제동 없이 지났어요." } ?: "오늘은 급제동 없이 지났어요."
+      Outcome.BETTER ->
+        row.before?.let {
+          val today = if (todayMin != null && todayMin > it.toKph) "오늘은 $todayMin km/h 아래로 떨어지지 않았어요." else "오늘은 급제동 없이 지났어요."
+          "${Script.dayWord(it.atMillis, now)}엔 ${it.fromKph}→${it.toKph} km/h로 급히 줄였는데, $today"
+        } ?: "오늘은 급제동 없이 지났어요."
       Outcome.OK -> "이번에도 급제동 없이 지났어요."
       Outcome.FIRST_OK -> "처음 지난 곳이에요. 급제동 없이 지났어요."
     }

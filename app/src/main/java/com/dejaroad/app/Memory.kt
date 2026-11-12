@@ -5,8 +5,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** 지난번 어려운 곳에서 급히 줄였던 기록 */
-data class PastHard(val key: String, val name: String, val atMillis: Long, val fromKph: Int, val toKph: Int, val lat: Double?, val lon: Double?)
+/** 지난번 어려운 곳에서 급히 줄였던 기록. [profile]은 그때 지점 앞뒤 속도(거리 기준, [SpeedProfile] 칸 수, 없으면 빈 목록) */
+data class PastHard(
+  val key: String,
+  val name: String,
+  val atMillis: Long,
+  val fromKph: Int,
+  val toKph: Int,
+  val lat: Double?,
+  val lon: Double?,
+  val profile: List<Float?> = emptyList(),
+)
 
 /** 어려운 곳을 지난 기록 (급제동이 있었는지) */
 data class Pass(val key: String, val atMillis: Long, val hard: Boolean)
@@ -48,9 +57,19 @@ class MemoryStore(context: Context) {
 
   private fun PastHard.toJson() =
     JSONObject().put("key", key).put("name", name).put("at", atMillis).put("from", fromKph).put("to", toKph).put("lat", lat ?: JSONObject.NULL).put("lon", lon ?: JSONObject.NULL)
+      .put("profile", JSONArray(profile.map { it?.toDouble() ?: JSONObject.NULL }))
 
   private fun JSONObject.toHard() =
-    PastHard(getString("key"), getString("name"), getLong("at"), getInt("from"), getInt("to"), optDouble("lat").takeIf { !it.isNaN() }, optDouble("lon").takeIf { !it.isNaN() })
+    PastHard(
+      getString("key"),
+      getString("name"),
+      getLong("at"),
+      getInt("from"),
+      getInt("to"),
+      optDouble("lat").takeIf { !it.isNaN() },
+      optDouble("lon").takeIf { !it.isNaN() },
+      optJSONArray("profile")?.let { a -> List(a.length()) { i -> if (a.isNull(i)) null else a.getDouble(i).toFloat() } } ?: emptyList(),
+    )
 
   private fun JSONObject.toPass() = Pass(getString("key"), getLong("at"), getBoolean("hard"))
 }
